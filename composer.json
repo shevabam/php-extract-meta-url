@@ -1,0 +1,25 @@
+{
+    "name": "shevabam/php-extract-meta-url",
+    "description": "Extract title, description, keywords, image, favicon and RSS from URL",
+    "keywords": ["extract", "title", "description", "keywords", "image", "url", "favicon", "rss"],
+    "homepage": "https://github.com/shevabam/php-extract-meta-url",
+    "type": "library",
+    "authors": [
+        {
+            "name": "shevabam",
+            "email": "me@shevarezo.fr",
+            "homepage": "https://shevarezo.fr"
+        }
+    ],
+    "license": "GPL-3.0-only",
+    "require": {
+        "php": ">=7.4.0",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpExtractMetaUrl\\": "src/"
+        }
+    },
+}

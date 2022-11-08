@@ -35,7 +35,7 @@ require 'vendor/autoload.php';
 
 $url = 'https://www.gadgets360.com/science/news/blue-origin-jeff-bezos-new-shepard-ns-23-nasa-3339832';
 
-$x = new \PhpExtractMetaUrl($url);
+$x = new \PhpExtractMetaUrl\PhpExtractMetaUrl($url);
 $x->setFormat('array'); // default: json
 $result = $x->extract();
 

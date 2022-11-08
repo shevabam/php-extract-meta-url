@@ -209,15 +209,3 @@ class PhpExtractMetaUrl
 }
 
 
-
-$url = 'https://blog.shevarezo.fr/post/2022/10/27/textify-copier-texte-normalement-incopiable';
-$url = 'https://github.com/rollbackpt/URLExtractor';
-$url = 'https://korben.info/comment-sauvegarder-un-disque-reseau-nas-vers-backblaze.html';
-$url = 'https://www.gadgets360.com/science/news/blue-origin-jeff-bezos-new-shepard-ns-23-nasa-3339832';
-
-$x = new PhpExtractMetaUrl($url);
-$x->setFormat('array');
-$result = $x->extract();
-
-echo '<pre>';
-print_r($result);

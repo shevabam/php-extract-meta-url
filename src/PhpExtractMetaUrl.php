@@ -117,7 +117,7 @@ class PhpExtractMetaUrl
         $nodes = $xpath->query('//head/meta[@name="description"]');
 
         if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('content')))
-            return $nodes->item(0)->getAttribute('content');
+            return \utf8_decode($nodes->item(0)->getAttribute('content'));
     }
 
     public function getKeywords()

@@ -1,211 +1,76 @@
 <?php
 
+declare(strict_types=1);
+
 namespace PhpExtractMetaUrl;
 
+use Exception;
+use JsonException;
+use PhpExtractMetaUrl\Enum\ErrorType;
+use PhpExtractMetaUrl\Service\CurlFetcher;
+use PhpExtractMetaUrl\Service\MetaExtractor;
+use PhpExtractMetaUrl\Validator\UrlValidator;
+
 class PhpExtractMetaUrl
-{ 
-    public $url = null;
-    public $curlDatas = null;
-    public $datas = null;
-    public $format = 'json'; // json | array
+{
+    private string $url;
+    private array $datas = [];
+    private string $format = 'json';
 
-    public static $CURL_OPTS = [
-        CURLOPT_CONNECTTIMEOUT  => 15,
-        CURLOPT_RETURNTRANSFER  => true,
-        CURLOPT_SSL_VERIFYPEER  => false,
-        CURLOPT_SSL_VERIFYHOST  => false,
-        CURLOPT_TIMEOUT         => 30,
-        CURLOPT_HEADER          => false,
-        CURLOPT_USERAGENT       => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
-        CURLOPT_ENCODING        => 1,
-    ];
-
-    private $dom = null; 
-
-    private $rss_types = [
-        'application/rss+xml',
-        'application/atom+xml',
-        'application/rdf+xml',
-        'application/rss',
-        'application/atom',
-        'application/rdf',
-        'text/rss+xml',
-        'text/atom+xml',
-        'text/rdf+xml',
-        'text/rss',
-        'text/atom',
-        'text/rdf',
-    ];
-
-
+    private UrlValidator $urlValidator;
+    private CurlFetcher $curlFetcher;
 
     public function __construct(string $url)
-    { 
+    {
         $this->url = $url;
+        $this->urlValidator = new UrlValidator();
+        $this->curlFetcher = new CurlFetcher();
 
-        if ($this->isUrlValid() === false)
-        {
-            throw new \Exception("The URL provided is incorrect");
-        }
-        
-        $this->datas['website'] = $this->getSiteDatas();
-
-        $this->curlGetContent();
-
-        $this->initializeDom();
-
-        $this->datas['title'] = $this->getTitle();
-
-        $this->datas['description'] = $this->getDescription();
-
-        $this->datas['keywords'] = $this->getKeywords();
-
-        $this->datas['image'] = $this->getImage();
-
-        $this->datas['favicon'] = $this->getFavicon();        
-
-        $this->datas['rss'] = $this->getRss();
-
+        $this->extract();
     }
 
-    public function setFormat(string $format)
+    public function setFormat(string $format): void
     {
-        $this->format = $format;
+        $this->format = in_array($format, ['json', 'array']) ? $format : 'json';
     }
 
-    public function extract()
+    /**
+     * @return string|array
+     * @throws JsonException
+     */
+    public function getResult()
     {
-        return $this->format == 'json' ? json_encode($this->datas) : $this->datas;
+        return $this->format === 'json' 
+            ? json_encode($this->datas, JSON_THROW_ON_ERROR) 
+            : $this->datas;
     }
 
-    public function isUrlValid()
+    /**
+     * @throws Exception
+     */
+    private function extract(): void
     {
-        return \filter_var($this->url, FILTER_VALIDATE_URL);
-    }
-
-
-    private function initializeDom()
-    {
-        $this->dom = new \DOMDocument();
-        @$this->dom->loadHTML($this->curlDatas);
-
-        return $this->dom;
-    }
-
-    public function getSiteDatas()
-    {
-        $parseUrl = \parse_url($this->url);
-
-        return [
-            'url' => $this->url,
-            'scheme' => $parseUrl['scheme'],
-            'host' => $parseUrl['host'],
-        ];
-    }
-
-    public function getTitle()
-    {
-        $titleNode = $this->dom->getElementsByTagName("title");
-        $titleValue = $titleNode->item(0)->nodeValue;
-
-        return $titleValue;
-    }
-
-    public function getDescription()
-    {
-        $xpath = new \DOMXpath($this->dom);
-        $nodes = $xpath->query('//head/meta[@name="description"]');
-
-        if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('content')))
-            return \utf8_decode($nodes->item(0)->getAttribute('content'));
-    }
-
-    public function getKeywords()
-    {
-        $xpath = new \DOMXpath($this->dom);
-        $nodes = $xpath->query('//head/meta[@name="keywords"]');
-
-        if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('content')))
-        {
-            return \array_map(function($k) { return \trim($k); }, \explode(',', $nodes->item(0)->getAttribute('content')));
-        }
-    }
-
-    public function getImage()
-    {
-        // Check if meta og:image exists
-        $xpath = new \DOMXpath($this->dom);
-        $nodes = $xpath->query('//head/meta[@property="og:image"]');
-
-        if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('content')))
-        {
-            return $nodes->item(0)->getAttribute('content');
+        if (!$this->urlValidator->isValid($this->url)) {
+            throw new Exception(json_encode([
+                'error_type' => ErrorType::INVALID_URL,
+                'message' => "The URL provided is incorrect",
+                'url' => $this->url
+            ], JSON_THROW_ON_ERROR), 500);
         }
 
-        // Check if meta twitter:image exists
-        $xpath = new \DOMXpath($this->dom);
-        $nodes = $xpath->query('//head/meta[@name="twitter:image"]');
+        $websiteData = $this->urlValidator->parseUrl($this->url);
+        $this->datas['website'] = $websiteData;
 
-        if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('content')))
-        {
-            return $nodes->item(0)->getAttribute('content');
-        }
-    }
+        $htmlContent = $this->curlFetcher->fetch($this->url);
+        $metaExtractor = new MetaExtractor($htmlContent, $websiteData);
 
-    public function getFavicon()
-    {
-        $xpath = new \DOMXpath($this->dom);
-        $nodes = $xpath->query('//head/link[@rel="icon" or @rel="shortcut icon"]');
-
-        if (count($nodes) > 0 && !empty($nodes->item(0)->getAttribute('href')))
-            return $nodes->item(0)->getAttribute('href');
-    }
-
-    public function getRss()
-    {
-        $xpath = new \DOMXpath($this->dom);
-        $links = $xpath->query('//head/link[@rel="alternate"]');
-
-        $rss = [];
-        foreach ($links as $link)
-        {
-            $link_type = $link->getAttribute('type');
-
-            if (\in_array($link_type, $this->rss_types))
-            {
-                $feed_url = $link->getAttribute('href');
-
-                $rss[] = $feed_url;
-            }
-        }
-
-        return $rss;
-    }
-     
-
-    private function curlGetContent()
-    {
-        $ch = \curl_init();
-
-        $opts = self::$CURL_OPTS;
-        $opts[CURLOPT_URL] = $this->url;
-        
-        \curl_setopt_array($ch, $opts);
-
-        $response = \curl_exec($ch);
-        
-        if (!\curl_exec($ch))
-        {
-            throw new \Exception('cURL error: "'.\curl_error($ch).'" - Code: '. \curl_errno($ch));
-        }
-
-        $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        \curl_close($ch);
-
-        if (!empty($response) && 20 === intval(\substr($httpCode, 0, 2)))
-            $this->curlDatas = $response;
+        $this->datas = array_merge($this->datas, [
+            'title' => $metaExtractor->extractTitle() ?? '',
+            'description' => $metaExtractor->extractDescription() ?? '',
+            'keywords' => $metaExtractor->extractKeywords() ?? [],
+            'image' => $metaExtractor->extractImage() ?? null,
+            'favicon' => $metaExtractor->extractFavicon($websiteData) ?? null,
+            'rss' => $metaExtractor->extractRss() ?? [],
+        ]);
     }
 }
-
-

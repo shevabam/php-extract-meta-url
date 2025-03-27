@@ -12,12 +12,13 @@
         }
     ],
     "license": "GPL-3.0-only",
-    "version": "1.0.4",
+    "version": "2.0.0",
     "minimum-stability": "stable",
     "require": {
-        "php": ">=7.4.0",
+        "php": ">=7.4",
         "ext-curl": "*",
-        "ext-json": "*"
+        "ext-dom": "*",
+        "ext-libxml": "*"
     },
     "autoload": {
         "psr-4": {
